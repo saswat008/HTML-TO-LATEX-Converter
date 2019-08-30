@@ -1,5 +1,5 @@
-cop1:     	lex.yy.c cop1.tab.c
-		gcc lex.yy.c cop1.tab.c -lfl -o cop1
+cop1:     	lex.yy.c cop1.tab.c AST.cpp
+		g++ lex.yy.c cop1.tab.c AST.cpp -lfl -o cop1
 
 lex.yy.c:       cop1.tab.h cop1.lex
 		flex cop1.lex
