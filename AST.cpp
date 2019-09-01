@@ -695,10 +695,14 @@ void produceLatexCode(latexNode* node)			{
 											cout<<"|c";
 										}
 										cout<<"|}"<<endl;
+										produceChildren(node);
+										fcol = true;
 									}
-									produceChildren(node);
-									cout<<" \\\\"<<endl;
-									fcol = true;
+									else
+									{
+										cout<<" \\\\"<<endl;
+										produceChildren(node);
+									}
 								}
 
 								else if(node->nodeType == "thead")
