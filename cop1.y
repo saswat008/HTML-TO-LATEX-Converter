@@ -1,11 +1,14 @@
 %{
 #include"string.h"
 #include"stdlib.h"
+#include<fstream>
+#include"AST.h"
 int yywrap(void);
 int yylineno;
 extern int yylex();
 extern FILE *yyin;
 extern void yyerror (char const* st);
+FILE *fpO;
 %}
 
 %define parse.error verbose
@@ -14,11 +17,13 @@ extern void yyerror (char const* st);
 %token	HEADER1O HEADER1C HEADER2O HEADER2C HEADER3O HEADER3C HEADER4O HEADER4C HEADER5O HEADER5C HEADER6O HEADER6C DIVISIONO DIVISIONC TLTYPO TLTYPC CENTERO CENTERC BREAKLINE
 %token	UNORDLISTO UNORDLISTC ORDLISTO ORDLISTC LISTO LISTC DESCLISTO DESCLISTC DEFTERMO DEFTERMC DESCTERMO DESCTERMC UNDERLINEO UNDERLINEC BOLDO BOLDC ITALICO ITALICC EMPHO EMPHC
 %token	STRONGO STRONGC SMALLO SMALLC SUBO SUBC SUPO SUPC TABLEO TABLEC TABLEHEADO TABLEHEADC TABLEROWO TABLEROWC TABLEDATAO TABLEDATAC CAPTIONO CAPTIONC FIGUREO FIGUREC FIGCAPTIONO FIGCAPTIONC
-%token	IMGO SRCFIRST SRCPATH SRCEND HFIRST HSIZE HEND WFIRST WSIZE WEND IMGEND
+%token	IMGO SRCFIRST SRCPATH SRCEND HFIRST HSIZE HEND WFIRST WSIZE WEND IMGEND SYMBOLS SYMBOLM SYMBOLE SPECIAL
 
 %union{
         char* tag;
-        char* s;
+	char* v;
+        astNode* s;
+	vector<astNode*>* t;
 }
 
 %type <tag> DOCTYP HTMLO HTMLC HEADO HEADC TITLEO TITLEC BODYO BODYC PARAGRAPHO PARAGRAPHC FONTOFIRST FONTOEND FONTO FONTC AHOFIRST AHOEND AO AHC 
@@ -26,1064 +31,918 @@ extern void yyerror (char const* st);
 %type <tag> UNORDLISTO UNORDLISTC ORDLISTO ORDLISTC LISTO LISTC DESCLISTO DESCLISTC DEFTERMO DEFTERMC DESCTERMO DESCTERMC UNDERLINEO UNDERLINEC BOLDO BOLDC ITALICO ITALICC EMPHO EMPHC
 %type <tag> STRONGO STRONGC SMALLO SMALLC SUBO SUBC SUPO SUPC TABLEO TABLEC TABLEHEADO TABLEHEADC TABLEROWO TABLEROWC TABLEDATAO TABLEDATAC CAPTIONO CAPTIONC 
 %type <tag> IMGO SRCFIRST SRCPATH SRCEND HFIRST HSIZE HEND WFIRST WSIZE WEND IMGEND FIGUREO FIGUREC FIGCAPTIONO FIGCAPTIONC
-%type <s>   STR mainBody head headFollow htmlFollow body bodyFollow para paraFollow font ah ahFollow fontFollow div divFollow FONTOMIDDLE AHOMIDDLE 
-%type <s>   header1 header1Follow header2 header2Follow header3 header3Follow header4 header4Follow header5 header5Follow header6 header6Follow uList uListFollow oList oListFollow lists list listFollow
+%type <s>   start mainBody head headFollow htmlFollow title body bodyFollow para paraFollow font ah div divFollow 
+%type <s>   header1 header1Follow header2 header2Follow header3 header3Follow header4 header4Follow header5 header5Follow header6 header6Follow uList uListFollow oList oListFollow list listFollow
 %type <s>   center centerFollow tType tTypeFollow bold boldFollow uLine uLineFollow italic italicFollow emph emphFollow strong strongFollow small smallFollow sup supFollow sub subFollow
-%type <s>   phraseContent pContent flowContent fContent dl dlFollow dtList dt dtFollow dd ddFollow table tableFollow tFollow tr trFollow trList th thFollow thList td tdFollow tdList caption
-%type <s>   figure figcaption figFollow figcapFollow figContent figC img imgFollow src height width
+%type <s>   pContent fContent dl dlFollow dt dtFollow dd ddFollow table tableFollow tr trFollow th thFollow td tdFollow caption
+%type <s>   figure figcaption figFollow figcapFollow figContent img imgFollow src height width content tCont aCont symbol special
+%type <v>   STR FONTOMIDDLE AHOMIDDLE SYMBOLS SYMBOLM SYMBOLE SPECIAL
+%type <t>   flowContent lists dtList phraseContent divList tContent aContent trList thList tdList
+
 %%
 
-START:          DOCTYP {printf("%s",$1);} mainBody {printf("\n %s\n",$3);}
-     		|mainBody {printf("\n %s\n",$1);};
-
+start:		DOCTYP mainBody		{
+						$$ = newAst("ROOT");
+						$$->child.push_back($2);
+					}
+		|mainBody		{
+						$$ = newAst("ROOT");
+						$$->child.push_back($1);
+					};
 mainBody:       HTMLO htmlFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        };
+						$$ = $2;
+						latexNode* node = new latexNode;
+						node = convert($$);
+						produceLatexCode(node,fpO);
+					};
 
 htmlFollow:     head body HTMLC		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(s,$2),$3);
-                                                $$ = s;
+						$$ = newAst("HTML");
+						$$->child.push_back($1);
+						$$->child.push_back($2);
                                         }
                 |head HTMLC 		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = newAst("HTML");
+						$$->child.push_back($1);
                                         }
                 |body HTMLC		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = newAst("HTML");
+						$$->child.push_back($1);
                                         }
                 |HTMLC                  {
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        };
-
+						$$ = newAst("HTML")
+					}
+;
 head:           HEADO headFollow  	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        };
+                                                $$ = $2;
+                                        }
+;
 
-headFollow:     TITLEO STR TITLEC HEADC {
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+strlen($4)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(strcat(s,$2),$3),$4);
-                                                $$ = s;
+headFollow:     title HEADC 		{
+                                                $$ = newAst("HEAD");
+						$$->child.push_back($1);
                                         } 
                 |HEADC                  {
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s = strcpy(s,$1);
-                                                $$ = s;
+                                                $$ = newAst("HEAD");
                                         };
 
+title:		TITLEO STR TITLEC	{
+     						$$ = newAst("TITLE");
+						$$->value = $2;
+					}
+     		|TITLEO TITLEC		{
+						$$ = newAst("TITLE");
+					}
+;
+
 body:           BODYO bodyFollow       	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 bodyFollow:     flowContent BODYC       {
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = newAst("BODY");
+						$$->child = *$1;
                                         }
                 |BODYC                  {
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+                                                $$ = newAst("BODY");
                                         };
-
-
-uList:		UNORDLISTO uListFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        };
-
-uListFollow:	lists UNORDLISTC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        }	
-	   	| UNORDLISTC		{
-						char *s = (char*)malloc(strlen($1)+1);
-						s=strcpy(s,$1);
-						$$ = s;
-					};
-
-oList:		ORDLISTO oListFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        };
-
-oListFollow:	lists ORDLISTC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        }	
-	   	| ORDLISTC		{
-						char *s = (char*)malloc(strlen($1)+1);
-						s=strcpy(s,$1);
-						$$ = s;
-					};
-
-lists:		lists list		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        }
-     		|list			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        };
-
-list:		LISTO listFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        };
-
-listFollow:	flowContent LISTC	{
-						char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-						s=strcpy(s,$1); s = strcat(s,$2);
-						$$ = s;
-					}	
-	  	|LISTC			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        };	
-
-phraseContent:	phraseContent pContent	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        }
-	     	|pContent		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        };
-
-pContent:	ah			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-	     	|bold			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|emph			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|italic			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|uLine			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|small			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|strong			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|sup			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|sub			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|STR			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		
-		|BREAKLINE		{
-						char *s = (char*)malloc(strlen($1)+strlen("\n")+1);
-						s = strcpy(s,$1); s = strcat(s,"\n");
-						$$ = s;
-					}
-		|img			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|center			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|tType			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|font			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-;
 
 flowContent:	flowContent fContent	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $1->push_back($2);
+                                                $$ = $1;
                                         }
 	   	|fContent		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						vector<astNode*>* vec = new vector<astNode*> ();
+                                                vec->push_back($1);
+                                                $$ = vec;
+						vec = NULL;
                                         };
 
 fContent:	ah			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-	   	|bold			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|emph			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+                                                $$ = $1;
+                                        }		
+		|img			{
+                                                $$ = $1;
                                         }
 		|header1		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+                                                $$ = $1;
                                         }
 		|header2		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+                                                $$ = $1;
                                         }
 		|header3		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+                                                $$ = $1;
                                         }
 		|header4		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+                                                $$ = $1;
                                         }
 		|header5		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+                                                $$ = $1;
                                         }
 		|header6		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+                                                $$ = $1;
                                         }
-		|italic			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|uLine			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|para			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|small			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|strong			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|sub			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|sup			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|STR			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }		
-		|BREAKLINE		{
-						char *s = (char*)malloc(strlen($1)+strlen("\n")+1);
-						s = strcpy(s,$1); s = strcat(s,"\n");
-						$$ = s;
-					}
-		|div			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|dl			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|table			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|figure			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|uList			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|oList			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|img			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|center			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|tType			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		|font			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+		|content		{
+                                                $$ = $1;
                                         }
 ;
 
+content:	italic			{
+                                                $$ = $1;
+                                        }
+		|uLine			{
+                                                $$ = $1;
+                                        }
+		|para			{
+                                                $$ = $1;
+                                        }
+		|small			{
+                                                $$ = $1;
+                                        }
+		|strong			{
+                                                $$ = $1;
+                                        }
+		|sub			{
+                                                $$ = $1;
+                                        }
+		|sup			{
+                                                $$ = $1;
+                                        }
+		|STR			{
+                                                $$ = newAst("STRING");
+						$$->value = $1;
+                                        }		
+		|BREAKLINE		{
+						$$ = newAst("BR");
+					}
+		|div			{
+                                                $$ = $1;
+                                        }
+		|dl			{
+                                                $$ = $1;
+                                        }
+		|table			{
+                                                $$ = $1;
+                                        }
+		|figure			{
+                                                $$ = $1;
+                                        }
+		|uList			{
+                                                $$ = $1;
+                                        }
+		|oList			{
+                                                $$ = $1;
+                                        }
+		|center			{
+                                                $$ = $1;
+                                        }
+		|tType			{
+                                                $$ = $1;
+                                        }
+		|font			{
+                                                $$ = $1;
+                                        }
+		
+	   	|bold			{
+                                                $$ = $1;
+                                        }
+		|emph			{
+                                                $$ = $1;
+                                        }
+		|symbol			{
+						$$ = $1;
+					}
+		|special		{
+						$$ = $1;
+					}
+;
+
+aContent:	aContent aCont		{
+						$1->push_back($2);
+                                                $$ = $1;
+					}
+		|aCont			{
+						vector<astNode*>* vec = new vector<astNode*> ();
+                                                vec->push_back($1);
+                                                $$ = vec;
+						vec = NULL;
+					};
+
+aCont:		header1			{
+                                                $$ = $1;
+                                        }
+		|header2		{
+                                                $$ = $1;
+                                        }
+		|header3		{
+                                                $$ = $1;
+                                        }
+		|header4		{
+                                                $$ = $1;
+                                        }
+		|header5		{
+                                                $$ = $1;
+                                        }
+		|header6		{
+                                                $$ = $1;
+                                        }
+		|content		{
+                                                $$ = $1;
+                                        };
+
+tContent:	tContent tCont		{
+						$1->push_back($2);
+                                                $$ = $1;
+					}
+		| tCont			{
+						vector<astNode*>* vec = new vector<astNode*> ();
+                                                vec->push_back($1);
+                                                $$ = vec;
+						vec = NULL;
+					};
+
+tCont:		ah			{
+                                                $$ = $1;
+                                        }		
+		|img			{
+                                                $$ = $1;
+                                        }
+		|content		{
+                                                $$ = $1;
+                                        }
+;
+
+phraseContent:	phraseContent pContent	{
+	     					$1->push_back($2);
+                                                $$ = $1;
+                                        }
+	     	|pContent		{
+						vector<astNode*>* vec = new vector<astNode*> ();
+                                                vec->push_back($1);
+                                                $$ = vec;
+						vec = NULL;
+                                        };
+
+pContent:	ah			{
+                                               	$$ = $1;
+                                        }
+	     	|bold			{
+                                                $$ = $1;
+                                        }
+		|emph			{
+                                                $$ = $1;
+                                        }
+		|italic			{
+                                                $$ = $1;
+                                        }
+		|uLine			{
+                                                $$ = $1;
+                                        }
+		|small			{
+                                                $$ = $1;
+                                        }
+		|strong			{
+                                                $$ = $1;
+                                        }
+		|sup			{
+                                                $$ = $1;
+                                        }
+		|sub			{
+                                                $$ = $1;
+                                        }
+		|STR			{
+                                                $$ = newAst("STRING");
+						$$->value = $1;
+                                        }
+		
+		|BREAKLINE		{
+						$$ = newAst("BR");
+					}
+		|img			{
+                                                $$ = $1;
+                                        }
+		|center			{
+                                                $$ = $1;
+                                        }
+		|tType			{
+                                                $$ = $1;
+                                        }
+		|font			{
+                                                $$ = $1;
+                                        }
+		|symbol			{
+						$$ = $1;
+					}
+		|special		{
+						$$ = $1;
+					}
+;
+
+symbol:		SYMBOLS SYMBOLM SYMBOLE	{
+      					 	$$ = newAst("SYMBOL");
+						$$->value = $2;
+					};
+
+special:	SPECIAL			{
+       						$$ = newAst("SPECIAL");
+						$$->value = $1;
+					};
+
+
+uList:		UNORDLISTO uListFollow	{
+                                                $$ = $2;
+                                        };
+
+uListFollow:	lists UNORDLISTC	{
+	   					$$ = newAst("UL");
+                                                $$->child = *$1;
+                                        }	
+	   	| UNORDLISTC		{
+						$$ = newAst("UL");
+					};
+
+oList:		ORDLISTO oListFollow	{
+     						$$ = $2;
+                                        };
+
+oListFollow:	lists ORDLISTC		{
+   						$$ = newAst("OL");
+                                                $$->child = *$1;	   
+                                        }	
+	   	| ORDLISTC		{
+						$$ = newAst("OL");
+					};
+
+lists:		lists list		{
+     						$1->push_back($2);
+                                                $$ = $1;
+                                        }
+     		|list			{
+						vector<astNode*>* vec = new vector<astNode*> ();
+                                                vec->push_back($1);
+                                                $$ = vec;
+						vec = NULL;
+                                        };
+
+list:		LISTO listFollow	{
+    						$$ = $2;
+                                        };
+
+listFollow:	flowContent LISTC	{
+	  					$$ = newAst("LI");
+                                                $$->child = *$1;
+					}	
+	  	|LISTC			{
+						$$ = newAst("LI");
+                                        };	
+
 div:		DIVISIONO divFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 divFollow:	flowContent DIVISIONC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	 					$$ = newAst("DIV");
+                                                $$->child = *$1;
+                                        }
+		| dtList DIVISIONC	{
+						$$ = newAst("DIV");
+                                                $$->child = *$1;
                                         }
 		| DIVISIONC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("DIV");
                                         };
 
 para:           PARAGRAPHO  paraFollow  {
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                               	$$ = $2;
                                         };               
 
 paraFollow:     phraseContent PARAGRAPHC{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	  					$$ = newAst("P");
+                                                $$->child = *$1;
                                         }                                                       
                 |PARAGRAPHC             {
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("P");
                                         };
 
-font:           FONTOFIRST FONTOMIDDLE FONTOEND fontFollow		{
-                                                				char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+strlen($4)+1);
-                                                				s=strcpy(s,$1); s = strcat(strcat(strcat(s,$2),$3),$4);
-                                                				$$ = s;
-                                        				}
-                |FONTO fontFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        };
-
-fontFollow:     flowContent FONTC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);/*STR*/
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        }
-                |FONTC                  {
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        };
-
-ah:             AHOFIRST AHOMIDDLE AHOEND ahFollow	{
-                                                		char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+strlen($4)+1);
-                                                		s=strcpy(s,$1); s = strcat(strcat(strcat(s,$2),$3),$4);
-                                                		$$ = s;
-                                        		}
-                |AO  ahFollow		{
-                                                	char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                	s=strcpy(s,$1); s = strcat(s,$2);
-                                                	$$ = s;
-                                        };
-
-ahFollow:       flowContent AHC   	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);/*STR*/
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        }
-                |AHC                    {
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        };
 
 center:		CENTERO centerFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 centerFollow:	flowContent CENTERC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);/*STR*/
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	    					$$ = newAst("CENTER");
+                                                $$->child = *$1;
                                         }
 	    	|CENTERC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("CENTER");
                                         };
 
 header1:	HEADER1O header1Follow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 header1Follow:	phraseContent HEADER1C	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	     					$$ = newAst("H1");
+                                                $$->child = *$1;
                                         }
 	    	|HEADER1C		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("H1");
                                         };
 
 header2:	HEADER2O header2Follow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 header2Follow:	phraseContent HEADER2C	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	     					$$ = newAst("H2");
+                                                $$->child = *$1;
                                         }
 	    	|HEADER2C		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("H2");
                                         };
 
 header3:	HEADER3O header3Follow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 header3Follow:	phraseContent HEADER3C	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	     					$$ = newAst("H3");
+                                                $$->child = *$1;
                                         }
 	    	|HEADER3C		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("H3");
                                         };
 
 header4:	HEADER4O header4Follow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 header4Follow:	phraseContent HEADER4C	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	     					$$ = newAst("H4");
+                                                $$->child = *$1;
                                         }
 	    	|HEADER4C		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("H4");
                                         };
 
 header5:	HEADER5O header5Follow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 header5Follow:	phraseContent HEADER5C	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	     					$$ = newAst("H5");
+                                                $$->child = *$1;
                                         }
 	    	|HEADER5C		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("H5");
                                         };
 
 header6:	HEADER6O header6Follow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 header6Follow:	phraseContent HEADER6C	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	     					$$ = newAst("H6");
+                                                $$->child = *$1;
                                         }
 	    	|HEADER6C		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("H6");
                                         };
 
 tType:		TLTYPO tTypeFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 tTypeFollow:	flowContent TLTYPC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);/*STR*/
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	   					$$ = newAst("TT");
+                                                $$->child = *$1;
                                         }
 	    	|TLTYPC			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("TT");
                                         };
 
 bold:		BOLDO boldFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 boldFollow:	phraseContent BOLDC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	  					$$ = newAst("B");
+                                                $$->child = *$1;
                                         }
 	    	|BOLDC			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("B");
                                         };
 
 uLine:		UNDERLINEO uLineFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 uLineFollow:	phraseContent UNDERLINEC{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	   					$$ = newAst("U");
+                                                $$->child = *$1;
                                         }
 	    	|UNDERLINEC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("U");
                                         };
 
 italic:		ITALICO italicFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 italicFollow:	phraseContent ITALICC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	    					$$ = newAst("I");
+                                                $$->child = *$1;
                                         }
 	    	|ITALICC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+                                             	$$ = newAst("I");
                                         };
 
 emph:		EMPHO emphFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 emphFollow:	phraseContent EMPHC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	  					$$ = newAst("EM");
+                                                $$->child = *$1;
                                         }
 	    	|EMPHC			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("EM");
                                         };
 
 strong:		STRONGO strongFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 strongFollow:	phraseContent STRONGC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	    					$$ = newAst("STRONG");
+                                                $$->child = *$1;
                                         }
 	    	|STRONGC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("STRONG");
                                         };
 
 small:		SMALLO smallFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 smallFollow:	phraseContent SMALLC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	   					$$ = newAst("SMALL");
+                                                $$->child = *$1;
                                         }
 	    	|SMALLC			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("SMALL");
                                         };
 
 sup:		SUPO supFollow		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 supFollow:	phraseContent SUPC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	 					$$ = newAst("SUP");
+                                                $$->child = *$1;
                                         }
 	    	|SUPC			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("SUP");
                                         };
 
 sub:		SUBO subFollow		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 subFollow:	phraseContent SUBC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	 					$$ = newAst("SUB");
+                                                $$->child = *$1;
                                         }
 	    	|SUBC			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("SUB");
                                         };
 
 dl:		DESCLISTO dlFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 dlFollow:	dtList DESCLISTC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+						$$ = newAst("DL");
+                                                $$->child = *$1;
+                                        }
+		|divList DESCLISTC	{
+						$$ = newAst("DL");
+                                                $$->child = *$1;
                                         }
 		| DESCLISTC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("DL");
+                                        };
+
+divList:	divList div		{
+       						$1->push_back($2);
+                                                $$ = $1;
+                                        }
+		|div			{
+						vector<astNode*>* vec = new vector<astNode*> ();
+                                                vec->push_back($1);
+                                                $$ = vec;
+						vec = NULL;
                                         };
 
 dtList:		dtList dt		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+      						$1->push_back($2);
+                                                $$ = $1;
                                         }
        		|dt			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						vector<astNode*>* vec = new vector<astNode*> ();
+                                                vec->push_back($1);
+                                                $$ = vec;
                                         };
 
 dt:		DEFTERMO dtFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
-dtFollow:	flowContent DEFTERMC dd	{
-                                                		char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+1);/*STR*/
-                                                		s=strcpy(s,$1); s = strcat(strcat(s,$2),$3);
-                                                		$$ = s;
+dtFollow:	tContent DEFTERMC dd	{
+						$$ = newAst("DT");
+                                                $$->child = *$1;
+						$$->child.push_back($3);
                                         }	
-		|flowContent DEFTERMC	{
-                                                		char *s = (char*)malloc(strlen($1)+strlen($2)+1);/*STR*/
-                                                		s=strcpy(s,$1); s = strcat(s,$2);
-                                                		$$ = s;
+		|tContent DEFTERMC	{
+						$$ = newAst("DT");
+                                                $$->child = *$1;
                                         }
 		|DEFTERMC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("DT");
                                         };
 
 dd:		DESCTERMO ddFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 ddFollow:	flowContent DESCTERMC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+						$$ = newAst("DD");
+                                                $$->child = *$1;
                                         }
 		|DESCTERMC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("DD");
                                         };
 
 table:		TABLEO tableFollow 	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+     						$$ = $2;
                                         };
 
-tableFollow :	caption tFollow 	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+tableFollow :	caption trList TABLEC	{
+	    					$$ = newAst("TABLE");
+                                                $$->child.push_back($1);
+						$$->child.insert($$->child.end(),$2->begin(),$2->end());
                                         }
-		|tFollow		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        };
-
-caption:	CAPTIONO flowContent CAPTIONC		{
-                                                		char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+1);/*STR*/
-                                                		s=strcpy(s,$1); s = strcat(strcat(s,$2),$3);
-                                                		$$ = s;
-                                        		}
-		|CAPTIONO CAPTIONC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
-                                        };
-
-tFollow:	trList TABLEC		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+		|trList TABLEC		{
+						$$ = newAst("TABLE");
+                                                $$->child = *$1;
                                         }
 		|TABLEC			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("TABLE");
+					};
+
+caption:	CAPTIONO flowContent CAPTIONC		{
+       								$$ = newAst("CAPTION");
+                                                		$$->child = *$2;
+                                        		}
+		|CAPTIONO CAPTIONC	{
+						$$ = newAst("CAPTION");
                                         };
 
 trList:		trList tr		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+      						$1->push_back($2);
+                                                $$ = $1;
                                         }
 		|tr			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						vector<astNode*>* vec = new vector<astNode*> ();
+                                                vec->push_back($1);
+                                                $$ = vec;
+						vec = NULL;
                                         };
 
 tr:		TABLEROWO trFollow 	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 trFollow:	thList TABLEROWC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+						$$ = newAst("TR");
+                                                $$->child = *$1;
                                         }
 		|tdList TABLEROWC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+						$$ = newAst("TR");
+                                                $$->child = *$1;
                                         }
 		|TABLEROWC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("TR");
                                         };
 
 thList:		thList th		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+      						$1->push_back($2);
+                                                $$ = $1;
                                         }
 		|th			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						vector<astNode*>* vec = new vector<astNode*> ();
+                                                vec->push_back($1);
+                                                $$ = vec;
+						vec = NULL;
                                         };
 
 th:		TABLEHEADO thFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
-thFollow:	flowContent TABLEHEADC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);/*STR*/
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+thFollow:	tContent TABLEHEADC	{
+						$$ = newAst("TH");
+                                                $$->child = *$1;
                                         }
 		|TABLEHEADC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("TH");
                                         };
 
 tdList:		tdList td		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+      						$1->push_back($2);
+                                                $$ = $1;
                                         }
 		|td			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						vector<astNode*>* vec = new vector<astNode*> ();
+                                                vec->push_back($1);
+                                                $$ = vec;
+						vec = NULL;
                                         };
 
 td:		TABLEDATAO tdFollow 	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 tdFollow:	flowContent TABLEDATAC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);/*STR*/
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+						$$ = newAst("TD");
+                                                $$->child = *$1;	
                                         }
 		|TABLEDATAC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("TD");
                                         };
 
 figure:		FIGUREO figFollow	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 figFollow:	figContent FIGUREC	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	 					$$ = newAst("FIGURE");
+                                                $$ = $1;
                                         }
 		|FIGUREC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("FIGURE");
                                         };
 
-figContent:	figContent figC		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+figContent:	figcaption flowContent	{
+	  					$$ = newAst("FIGCONTENT");
+                                                $$->child.push_back($1);
+						$$->child.insert($$->child.end(),$2->begin(),$2->end());
                                         }
-		|figC			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+	  	|flowContent figcaption	{
+						$$ = newAst("FIGCONTENT");
+                                                $$->child = *$1;
+						$$->child.push_back($2);
+                                        }
+		|flowContent		{
+						$$ = newAst("FIGCONTENT");
+                                                $$->child = *$1;
                                         };
-
-figC:		figcaption		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-		img			{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
-                                        }
-;
 
 figcaption:	FIGCAPTIONO figcapFollow{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 figcapFollow:	flowContent FIGCAPTIONC	{
-                                              	char *s = (char*)malloc(strlen($1)+strlen($2)+1);/*STR*/
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	    					$$ = newAst("FIGCAPTION");
+                                                $$->child = *$1;
                                         }
 		|FIGCAPTIONC		{
-                                                char *s = (char*)malloc(strlen($1)+1);
-                                                s=strcpy(s,$1);
-                                                $$ = s;
+						$$ = newAst("FIGCAPTION");
                                         };
 
 img:		IMGO imgFollow		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+                                                $$ = $2;
                                         };
 
 imgFollow:	src IMGEND		{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+1);
-                                                s=strcpy(s,$1); s = strcat(s,$2);
-                                                $$ = s;
+	 					$$ = newAst("IMG");
+                                                $$->attribute.push_back($1);
                                         }
 		|src height IMGEND	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(s,$2),$3);
-                                                $$ = s;
+                                                $$ = newAst("IMG");
+                                                $$->attribute.push_back($2);
+						$$->attribute.push_back($1);
                                         }
 		|src width IMGEND	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(s,$2),$3);
-                                                $$ = s;
+                                                $$ = newAst("IMG");
+                                                $$->attribute.push_back($2);
+						$$->attribute.push_back($1);
                                         }
 		|src height width IMGEND{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+strlen($4)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(strcat(s,$2),$3),$4);
-                                                $$ = s;
+                                                $$ = newAst("IMG");
+                                                $$->attribute.push_back($3);
+						$$->attribute.push_back($2);
+						$$->attribute.push_back($1);
                                         }
 		|src width height IMGEND{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+strlen($4)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(strcat(s,$2),$3),$4);
-                                                $$ = s;
+                                                $$ = newAst("IMG");
+                                                $$->attribute.push_back($3);
+						$$->attribute.push_back($2);
+						$$->attribute.push_back($1);
                                         }
 		|height src IMGEND	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(s,$2),$3);
-                                                $$ = s;
+                                                $$ = newAst("IMG");
+                                                $$->attribute.push_back($2);
+						$$->attribute.push_back($1);
                                         }
 		|height src width IMGEND{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+strlen($4)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(strcat(s,$2),$3),$4);
-                                                $$ = s;
+                                                $$ = newAst("IMG");
+                                                $$->attribute.push_back($1);
+						$$->attribute.push_back($3);
+						$$->attribute.push_back($2);
                                         }
 		|height width src IMGEND{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+strlen($4)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(strcat(s,$2),$3),$4);
-                                                $$ = s;
+                                                $$ = newAst("IMG");
+                                                $$->attribute.push_back($1);
+						$$->attribute.push_back($2);
+						$$->attribute.push_back($3);
                                         }
 		|width src IMGEND	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(s,$2),$3);
-                                                $$ = s;
+                                                $$ = newAst("IMG");
+                                                $$->attribute.push_back($1);
+						$$->attribute.push_back($2);		
                                         }
 		|width src height IMGEND{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+strlen($4)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(strcat(s,$2),$3),$4);
-                                                $$ = s;
+                                                $$ = newAst("IMG");
+                                                $$->attribute.push_back($1);
+						$$->attribute.push_back($3);
+						$$->attribute.push_back($2);
                                         }
 		|width height src IMGEND{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+strlen($4)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(strcat(s,$2),$3),$4);
-                                                $$ = s;
+                                                $$ = newAst("IMG");
+                                                $$->attribute.push_back($1);
+						$$->attribute.push_back($2);
+						$$->attribute.push_back($3);
                                         }
 ;
 
 src:		SRCFIRST SRCPATH SRCEND	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(s,$2),$3);
-                                                $$ = s;
+   						$$ = newAst("SRC");
+						$$->value = $2;
                                         };	
 
 height:		HFIRST HSIZE HEND	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(s,$2),$3);
-                                                $$ = s;
+                                                $$ = newAst("HEIGHT");
+						$$->value = $2;
                                         };
 
 width:		WFIRST WSIZE WEND	{
-                                                char *s = (char*)malloc(strlen($1)+strlen($2)+strlen($3)+1);
-                                                s=strcpy(s,$1); s = strcat(strcat(s,$2),$3);
-                                                $$ = s;
+     						$$ = newAst("WIDTH");
+						$$->value = $2;
                                         };
+
+font:           FONTOFIRST FONTOMIDDLE FONTOEND flowContent FONTC{
+    									$$ = newAst("FONT");
+									astNode* node = newAst("SIZE");
+									node->value = $2;
+									$$->attribute.push_back(node);
+									$$->child = *$4;
+                                        			 }
+		|FONTOFIRST FONTOMIDDLE FONTOEND FONTC		 {
+                                                                        $$ = newAst("FONT");
+                                                                        astNode* node = newAst("SIZE");
+                                                                        node->value = $2;
+                                                                        $$->attribute.push_back(node);
+                                                                 }
+                |FONTO flowContent FONTC{
+						$$ = newAst("FONT");
+                                                $$->child = *$2;
+                                        }
+		|FONTO FONTC		{
+						$$ = newAst("FONT");
+					};
+
+ah:             AHOFIRST AHOMIDDLE AHOEND aContent AHC	{
+  								$$ = newAst("A");
+                                                                astNode* node = newAst("HREF");
+                                                                node->value = $2;
+                                                                $$->attribute.push_back(node);
+                                                                $$->child = *$4;
+                                        		}
+		|AHOFIRST AHOMIDDLE AHOEND AHC		{
+  								$$ = newAst("A");
+                                                                astNode* node = newAst("HREF");
+                                                                node->value = $2;
+                                                                $$->attribute.push_back(node);
+                                        		}
+                |AO  aContent AHC	{
+						$$ = newAst("A");
+                                                $$->child = *$2;
+                                        }
+		|AO AHC			{
+						$$ = newAst("A");
+					};
+
 %%
 
 int yywrap(){}
@@ -1092,13 +951,11 @@ void yyerror(char const* st) {
     fprintf(stderr, "line %d: %s\n", yylineno, st);
 }
 
-int main()
+int main(int argc, char** argv)
 {
-        char* fname;
-        FILE *fp;
-        printf("Enter a filename \n");
-        scanf("%s",fname);
-        fp = fopen(fname,"r");
-        yyin = fp;
+        FILE *fpI;
+        fpI = fopen(argv[1],"r");
+        yyin = fpI;
+	fpO = fopen(argv[2],"w");
         yyparse();
 }
